@@ -1,3 +1,3 @@
-aiogram>=3.0.0,<4.0.0
-python-dotenv>=1.0.0
-aioschedule>=0.8.0
+aiogram==3.29.0
+python-dotenv==1.0.0
+aioschedule==0.5.2
