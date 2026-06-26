@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Telegram Verification Bot v2.0 - ПОЛНАЯ ВЕРСИЯ
+Telegram Verification Bot v2.0
 Все настройки зашиты в код, из .env только BOT_TOKEN и OWNER_ID
 """
 
@@ -48,27 +48,17 @@ load_dotenv()
 # ВСЕ НАСТРОЙКИ ЗДЕСЬ (зашиты в код)
 # ============================================================
 
-# Настройки бота (ОБЯЗАТЕЛЬНО из .env)
 BOT_TOKEN = os.getenv("BOT_TOKEN", "")
 OWNER_ID = int(os.getenv("OWNER_ID", 0))
 
-# Настройки базы данных (ЗАШИТЫ В КОД)
 DATABASE_NAME = "database.db"
-
-# Настройки отчетов (ЗАШИТЫ В КОД)
 REPORT_TIME = "23:59"
-TIMEZONE = "Europe/Moscow"
-
-# Настройки верификации (ЗАШИТЫ В КОД)
-VERIFY_TIMEOUT = 120  # секунд
-MAX_ATTEMPTS = 3  # попытки
-DELETE_DELAY = 60  # секунд - удаление сообщений бота
+VERIFY_TIMEOUT = 120
+MAX_ATTEMPTS = 3
+DELETE_DELAY = 60
 MAX_MESSAGES_PER_MINUTE = 20
-
-# Настройки логирования (ЗАШИТЫ В КОД)
 LOG_LEVEL = "INFO"
 
-# Проверка обязательных переменных
 if not BOT_TOKEN:
     raise ValueError("❌ BOT_TOKEN не задан в .env!")
 if not OWNER_ID:
@@ -152,8 +142,6 @@ VERIFICATION_REMINDER = """
 # ============================================================
 
 class Database:
-    """Работа с SQLite"""
-    
     def __init__(self, db_path: str):
         self.db_path = db_path
         self._init_tables()
@@ -170,21 +158,17 @@ class Database:
             conn.close()
     
     def _init_tables(self):
-        """Создание всех таблиц при первом запуске"""
         with self.connect() as conn:
             cursor = conn.cursor()
             
-            # Группы
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS groups (
                     group_id INTEGER PRIMARY KEY,
                     title TEXT,
-                    verified_only BOOLEAN DEFAULT 1,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
             
-            # Верифицированные пользователи
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS verified_users (
                     user_id INTEGER,
@@ -196,7 +180,6 @@ class Database:
                 )
             ''')
             
-            # Забаненные пользователи
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS banned_users (
                     user_id INTEGER,
@@ -207,7 +190,6 @@ class Database:
                 )
             ''')
             
-            # Запрещенные слова
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS forbidden_words (
                     word TEXT PRIMARY KEY,
@@ -215,15 +197,6 @@ class Database:
                 )
             ''')
             
-            # Белый список слов
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS whitelist_words (
-                    word TEXT PRIMARY KEY,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            ''')
-            
-            # Белый список пользователей
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS whitelist_users (
                     user_id INTEGER PRIMARY KEY,
@@ -232,7 +205,6 @@ class Database:
                 )
             ''')
             
-            # Статистика
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS statistics (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -244,12 +216,10 @@ class Database:
                     verifications_failed INTEGER DEFAULT 0,
                     messages_deleted INTEGER DEFAULT 0,
                     users_restricted INTEGER DEFAULT 0,
-                    active_users INTEGER DEFAULT 0,
                     UNIQUE(group_id, date)
                 )
             ''')
             
-            # Логи
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS logs (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -262,7 +232,6 @@ class Database:
                 )
             ''')
             
-            # Настройки
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS settings (
                     key TEXT PRIMARY KEY,
@@ -271,14 +240,12 @@ class Database:
                 )
             ''')
             
-            # Добавляем настройки по умолчанию
             cursor.execute('''
                 INSERT OR IGNORE INTO settings (key, value)
                 VALUES 
                     ('verification_enabled', '1'),
                     ('verification_attempts', '3'),
                     ('verification_timeout', '120'),
-                    ('spam_check_enabled', '1'),
                     ('delete_delay', '60'),
                     ('max_messages_per_minute', '20')
             ''')
@@ -287,7 +254,6 @@ class Database:
             logger.info("✅ Таблицы созданы/проверены")
     
     def get_forbidden_words(self) -> Set[str]:
-        """Получение кэша запрещенных слов"""
         if self._cache_words is None:
             self._cache_words = self._load_forbidden_words()
         return self._cache_words
@@ -326,7 +292,8 @@ class Database:
     def add_whitelist_user(self, user_id: int):
         with self.connect() as conn:
             cursor = conn.cursor()
-            cursor.execute('INSERT OR IGNORE INTO whitelist_users (user_id) VALUES (?)', (user_id,))
+            cursor.execute('INSERT OR IGNORE INTO whitelist_users (user_id, username) VALUES (?, ?)',
+                          (user_id, ""))
             conn.commit()
         self._cache_whitelist = None
     
@@ -340,10 +307,8 @@ class Database:
     def is_verified(self, user_id: int, group_id: int) -> bool:
         with self.connect() as conn:
             cursor = conn.cursor()
-            cursor.execute(
-                'SELECT 1 FROM verified_users WHERE user_id = ? AND group_id = ?',
-                (user_id, group_id)
-            )
+            cursor.execute('SELECT 1 FROM verified_users WHERE user_id = ? AND group_id = ?',
+                          (user_id, group_id))
             return cursor.fetchone() is not None
     
     def mark_verified(self, user_id: int, group_id: int, username: str = None, first_name: str = None):
@@ -358,10 +323,8 @@ class Database:
     def is_banned(self, user_id: int, group_id: int) -> bool:
         with self.connect() as conn:
             cursor = conn.cursor()
-            cursor.execute(
-                'SELECT 1 FROM banned_users WHERE user_id = ? AND group_id = ?',
-                (user_id, group_id)
-            )
+            cursor.execute('SELECT 1 FROM banned_users WHERE user_id = ? AND group_id = ?',
+                          (user_id, group_id))
             return cursor.fetchone() is not None
     
     def ban_user(self, user_id: int, group_id: int, reason: str = ""):
@@ -429,9 +392,6 @@ class AdminStates(StatesGroup):
     waiting_for_word = State()
     waiting_for_word_remove = State()
     waiting_for_word_search = State()
-    waiting_for_whitelist_add = State()
-    waiting_for_whitelist_remove = State()
-    waiting_for_settings = State()
     waiting_for_import = State()
 
 # ============================================================
@@ -471,25 +431,12 @@ class TextNormalizer:
         return text
     
     @staticmethod
-    def normalize_original(text: str) -> str:
-        if not text:
-            return ""
-        text = text.lower()
-        text = re.sub(r'[\s\n\r\t]+', '', text)
-        text = re.sub(r'[^\wа-яё]', '', text)
-        return text
-    
-    @staticmethod
     def check_forbidden(text: str, forbidden_words: Set[str]) -> Tuple[bool, str]:
         if not text:
             return False, ""
         clean = TextNormalizer.normalize(text)
         for word in forbidden_words:
             if word in clean:
-                return True, word
-        original = TextNormalizer.normalize_original(text)
-        for word in forbidden_words:
-            if word in original:
                 return True, word
         return False, ""
 
@@ -504,10 +451,10 @@ class Keyboards:
             keyboard=[
                 [KeyboardButton(text="📊 Статистика"), KeyboardButton(text="📝 Слова")],
                 [KeyboardButton(text="➕ Добавить слово"), KeyboardButton(text="➖ Удалить слово")],
-                [KeyboardButton(text="🔍 Поиск слова"), KeyboardButton(text="📋 Список слов")],
-                [KeyboardButton(text="📥 Импорт слов"), KeyboardButton(text="📤 Экспорт слов")],
-                [KeyboardButton(text="🛡️ Белый список"), KeyboardButton(text="📜 Логи")],
-                [KeyboardButton(text="⚙️ Настройки"), KeyboardButton(text="📊 Отправить отчет")]
+                [KeyboardButton(text="📋 Список слов"), KeyboardButton(text="📥 Импорт слов")],
+                [KeyboardButton(text="📤 Экспорт слов"), KeyboardButton(text="🛡️ Белый список")],
+                [KeyboardButton(text="📜 Логи"), KeyboardButton(text="⚙️ Настройки")],
+                [KeyboardButton(text="📊 Отправить отчет")]
             ],
             resize_keyboard=True
         )
@@ -599,7 +546,6 @@ async def chat_member_handler(update: ChatMemberUpdated):
     
     logger.info(f"🆕 Новый пользователь {user.id} зашел")
     
-    # Ограничиваем права
     try:
         await bot.restrict_chat_member(
             chat_id, user.id,
@@ -608,7 +554,6 @@ async def chat_member_handler(update: ChatMemberUpdated):
     except:
         pass
     
-    # Генерируем пример
     num1 = random.randint(1, 9)
     num2 = random.randint(1, 9)
     answer = num1 * num2
@@ -652,21 +597,17 @@ async def chat_member_handler(update: ChatMemberUpdated):
 
 async def verification_timeout(chat_id: int, user_id: int):
     await asyncio.sleep(VERIFY_TIMEOUT)
-    
     if user_id in verification_data:
         data = verification_data[user_id]
         user = data.get('user')
-        
         if 'message_id' in data:
             try:
                 await bot.delete_message(chat_id, data['message_id'])
             except:
                 pass
-        
         db.ban_user(user_id, chat_id, "Не прошел верификацию (таймаут)")
         db.update_stats(chat_id, 'verifications_failed')
         db.add_log('verification_timeout', chat_id, user_id, user.username if user else "", "Таймаут верификации")
-        
         await send_and_delete(chat_id, f"⏰ {user.first_name if user else ''}, время вышло!")
         del verification_data[user_id]
 
@@ -746,7 +687,6 @@ async def verify_callback(callback: CallbackQuery):
             random.shuffle(options)
             
             keyboard = Keyboards.verification([(str(opt), opt) for opt in options])
-            user_mention = f"@{callback.from_user.username}" if callback.from_user.username else callback.from_user.first_name
             
             msg = await bot.send_message(
                 chat_id,
@@ -782,7 +722,6 @@ async def group_message_handler(message: Message):
         except:
             pass
         
-        # Отправляем новую верификацию
         if user_id in verification_data:
             old_data = verification_data[user_id]
             if 'message_id' in old_data:
@@ -794,7 +733,6 @@ async def group_message_handler(message: Message):
                 old_data['timeout'].cancel()
             del verification_data[user_id]
         
-        # Создаем заново верификацию
         num1 = random.randint(1, 9)
         num2 = random.randint(1, 9)
         answer = num1 * num2
@@ -835,7 +773,6 @@ async def group_message_handler(message: Message):
         }
         return
     
-    # Проверка на спам
     forbidden_words = db.get_forbidden_words()
     if forbidden_words:
         text = message.text or message.caption or ""
@@ -945,19 +882,6 @@ async def admin_list_words(message: Message):
     for i, chunk in enumerate(chunks, 1):
         await message.answer(f"📋 Слова (часть {i}/{len(chunks)}):\n" + "\n".join(f"• {w}" for w in chunk))
 
-@dp.message(lambda m: m.text == "📤 Экспорт слов" and m.from_user.id == OWNER_ID)
-async def admin_export_words(message: Message):
-    words = db.get_forbidden_words()
-    if not words:
-        await message.answer("📋 Список слов пуст")
-        return
-    content = "\n".join(sorted(words))
-    file_path = "exported_words.txt"
-    with open(file_path, 'w', encoding='utf-8') as f:
-        f.write(content)
-    await message.answer_document(FSInputFile(file_path), caption="📤 Экспорт слов")
-    os.remove(file_path)
-
 @dp.message(lambda m: m.text == "📥 Импорт слов" and m.from_user.id == OWNER_ID)
 async def admin_import_words(message: Message, state: FSMContext):
     await state.set_state(AdminStates.waiting_for_import)
@@ -983,6 +907,19 @@ async def process_import_words(message: Message, state: FSMContext):
     except Exception as e:
         await message.answer(f"❌ Ошибка: {e}")
     await state.clear()
+
+@dp.message(lambda m: m.text == "📤 Экспорт слов" and m.from_user.id == OWNER_ID)
+async def admin_export_words(message: Message):
+    words = db.get_forbidden_words()
+    if not words:
+        await message.answer("📋 Список слов пуст")
+        return
+    content = "\n".join(sorted(words))
+    file_path = "exported_words.txt"
+    with open(file_path, 'w', encoding='utf-8') as f:
+        f.write(content)
+    await message.answer_document(FSInputFile(file_path), caption="📤 Экспорт слов")
+    os.remove(file_path)
 
 @dp.message(lambda m: m.text == "🛡️ Белый список" and m.from_user.id == OWNER_ID)
 async def admin_whitelist(message: Message):
@@ -1068,6 +1005,15 @@ async def admin_send_report(message: Message):
     await send_daily_report()
     await message.answer("✅ Отчет отправлен!")
 
+@dp.callback_query(lambda c: c.data == "cancel")
+async def cancel_callback(callback: CallbackQuery, state: FSMContext):
+    await state.clear()
+    try:
+        await callback.message.delete()
+    except:
+        pass
+    await callback.answer("✅ Отменено")
+
 # ============================================================
 # ОТЧЕТЫ
 # ============================================================
@@ -1100,15 +1046,6 @@ async def send_daily_report():
     except Exception as e:
         logger.error(f"Ошибка отчета: {e}")
 
-@dp.callback_query(lambda c: c.data == "cancel")
-async def cancel_callback(callback: CallbackQuery, state: FSMContext):
-    await state.clear()
-    try:
-        await callback.message.delete()
-    except:
-        pass
-    await callback.answer("✅ Отменено")
-
 # ============================================================
 # ЗАПУСК
 # ============================================================
@@ -1121,7 +1058,8 @@ async def init_groups():
                 chat = update.message.chat
                 with db.connect() as conn:
                     cursor = conn.cursor()
-                    cursor.execute('INSERT OR IGNORE INTO groups (group_id, title) VALUES (?, ?)', (chat.id, chat.title))
+                    cursor.execute('INSERT OR IGNORE INTO groups (group_id, title) VALUES (?, ?)',
+                                  (chat.id, chat.title))
                     conn.commit()
                     try:
                         members = await bot.get_chat_administrators(chat.id)
